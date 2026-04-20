@@ -2,67 +2,188 @@ import pandas as pd
 import numpy as np
 
 def load_and_clean_data(file_path):
-    # Cargar el archivo
+    """
+    Loads and cleans Bloomberg Commodities Excel file
+    Handles structure with multiple horizontal ticker blocks
+    """
+    # Load the file
     xl = pd.ExcelFile(file_path)
-    df_raw = xl.parse('Mensual', header=None)
+    df_raw = xl.parse('Monthly', header=None)
     
-    # Identificar fila de tickers (fila 3 en 0-index)
-    tickers_row = df_raw.iloc[3, 1:].dropna().values
-    # Identificar fila de campos (fila 4)
-    fields_row = df_raw.iloc[4, 1:].dropna().values
+    print(f"🔍 File dimensions: {df_raw.shape}")
     
-    # Crear estructura de columnas: ticker_campo
-    columns = []
-    for ticker, field in zip(tickers_row, fields_row):
-        if isinstance(field, str):
-            columns.append(f"{ticker}_{field}")
-        else:
-            columns.append(str(ticker))
+    # ===== 1. FIND TICKER AND FIELDS ROW =====
+    tickers_row_idx = 3
+    fields_row_idx = 5
     
-    # Datos empiezan en fila 6
-    data_rows = df_raw.iloc[6:, :].copy()
-    data_rows.columns = ['Dates'] + columns[:len(data_rows.columns)-1]
+    print(f"📍 Ticker row: {tickers_row_idx}")
+    print(f"📍 Fields row: {fields_row_idx}")
     
-    # Convertir fechas
-    data_rows['Dates'] = pd.to_datetime(data_rows['Dates'], errors='coerce')
-    data_rows = data_rows.dropna(subset=['Dates'])
-    data_rows = data_rows.set_index('Dates')
+    # ===== 2. EXTRACT ALL TICKERS AND THEIR FIELDS =====
+    all_tickers = []
+    all_fields = []
+    col_groups = []
     
-    # Reemplazar '#N/A N/A' y cadenas similares por NaN
-    data_rows = data_rows.replace(['#N/A N/A', '#N/A', 'N/A'], np.nan)
+    current_group = []
+    current_ticker = None
+    current_fields = []
     
-    # Convertir a numérico
-    data_rows = data_rows.apply(pd.to_numeric, errors='coerce')
+    for col in range(1, df_raw.shape[1]):
+        ticker_val = df_raw.iloc[tickers_row_idx, col]
+        field_val = df_raw.iloc[fields_row_idx, col]
+        
+        if pd.notna(ticker_val) and str(ticker_val).strip() != '' and ticker_val != 'nan':
+            if current_ticker is not None:
+                col_groups.append((current_ticker, current_fields, current_group))
+            current_ticker = str(ticker_val).strip()
+            current_fields = []
+            current_group = []
+        
+        if pd.notna(field_val) and str(field_val).strip() != '' and field_val != 'nan':
+            current_fields.append(str(field_val).strip())
+        
+        current_group.append(col)
     
-    # Eliminar columnas completamente vacías
-    data_rows = data_rows.dropna(axis=1, how='all')
+    if current_ticker is not None:
+        col_groups.append((current_ticker, current_fields, current_group))
     
-    # Crear target (precio del mes siguiente)
-    # Buscamos columnas que contengan 'PX_LAST'
-    px_last_cols = [col for col in data_rows.columns if 'PX_LAST' in col]
+    print(f"📊 Ticker groups found: {len(col_groups)}")
+    for ticker, fields, cols in col_groups:
+        print(f"   - {ticker}: {len(fields)} fields in columns {cols[0]}-{cols[-1]}")
+    
+    # ===== 3. EXTRACT DATA BY GROUP =====
+    date_col = 0
+    
+    # Find where data starts
+    data_start_idx = None
+    for idx in range(7, min(50, df_raw.shape[0])):
+        val = df_raw.iloc[idx, date_col]
+        try:
+            if pd.notna(val):
+                test_date = pd.to_datetime(val, errors='coerce')
+                if pd.notna(test_date):
+                    data_start_idx = idx
+                    break
+        except:
+            continue
+    
+    if data_start_idx is None:
+        data_start_idx = 7
+    
+    print(f"📍 Data start row: {data_start_idx}")
+    
+    # ===== 4. BUILD DATAFRAME FOR EACH TICKER =====
+    all_dfs = []
+    
+    for ticker, fields, col_indices in col_groups:
+        ticker_data = {}
+        
+        # Extract dates
+        dates = []
+        for idx in range(data_start_idx, df_raw.shape[0]):
+            date_val = df_raw.iloc[idx, date_col]
+            if pd.notna(date_val):
+                try:
+                    date = pd.to_datetime(date_val, errors='coerce')
+                    if pd.notna(date):
+                        dates.append(date)
+                except:
+                    pass
+        
+        if not dates:
+            continue
+        
+        # For each field, extract data
+        for i, field in enumerate(fields):
+            col_idx = col_indices[i] if i < len(col_indices) else col_indices[-1] + i - len(col_indices) + 1
+            
+            if col_idx >= df_raw.shape[1]:
+                continue
+            
+            values = []
+            for idx in range(data_start_idx, df_raw.shape[0]):
+                val = df_raw.iloc[idx, col_idx]
+                if pd.isna(val) or str(val) in ['#NAME?', '#N/A', 'N/A', '#NUM!', '']:
+                    values.append(np.nan)
+                else:
+                    try:
+                        values.append(float(val))
+                    except:
+                        values.append(np.nan)
+            
+            min_len = min(len(dates), len(values))
+            col_name = f"{ticker}_{field}"
+            ticker_data[col_name] = values[:min_len]
+        
+        if ticker_data:
+            df_ticker = pd.DataFrame(ticker_data)
+            df_ticker.index = dates[:len(df_ticker)]
+            all_dfs.append(df_ticker)
+    
+    # ===== 5. COMBINE ALL TICKERS =====
+    if not all_dfs:
+        raise ValueError("Could not extract data from any ticker")
+    
+    df_combined = pd.concat(all_dfs, axis=1)
+    
+    print(f"📊 Combined data: {df_combined.shape}")
+    
+    # ===== 6. FINAL CLEANING =====
+    df_combined = df_combined.replace([np.inf, -np.inf], np.nan)
+    
+    before_cols = len(df_combined.columns)
+    df_combined = df_combined.dropna(axis=1, how='all')
+    print(f"🗑️ Removed {before_cols - len(df_combined.columns)} empty columns")
+    
+    before_rows = len(df_combined)
+    df_combined = df_combined.dropna(axis=0, how='all')
+    print(f"🗑️ Removed {before_rows - len(df_combined)} empty rows")
+    
+    # ===== 7. SELECT TARGET =====
+    px_last_cols = [col for col in df_combined.columns if 'PX_LAST' in col]
     
     if not px_last_cols:
-        raise ValueError("No se encontraron columnas con PX_LAST")
+        numeric_cols = df_combined.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) == 0:
+            raise ValueError("No numeric columns found")
+        target_col = numeric_cols[0]
+    else:
+        target_col = px_last_cols[0]
     
-    # Usar la primera columna PX_LAST como ejemplo (puedes ajustar)
-    target_col = px_last_cols[0]
+    print(f"🎯 Using target: {target_col}")
     
-    # Crear target: precio del mes siguiente
-    data_rows['target'] = data_rows[target_col].shift(-1)
+    # Create target (next month's price)
+    df_combined['target'] = df_combined[target_col].shift(-1)
     
-    # Eliminar últimos NaN del target
-    data_rows = data_rows.dropna(subset=['target'])
+    before_rows = len(df_combined)
+    df_combined = df_combined.dropna(subset=['target'])
+    print(f"🗑️ Removed {before_rows - len(df_combined)} rows without target")
     
-    # Eliminar columnas que no sirven (ej. MATURITY, CUR_MKT_CAP si son constantes)
-    useless_patterns = ['MATURITY', 'AMT_OUTSTANDING', 'CUR_MKT_CAP']
-    for pattern in useless_patterns:
-        cols_to_drop = [col for col in data_rows.columns if pattern in col]
-        data_rows = data_rows.drop(columns=cols_to_drop, errors='ignore')
+    # Remove columns with >50% NaN
+    nan_thresh = 0.5
+    before_cols = len(df_combined.columns)
+    df_combined = df_combined.loc[:, df_combined.isnull().mean() < nan_thresh]
+    print(f"🗑️ Removed {before_cols - len(df_combined.columns)} columns with >50% NaN")
     
-    return data_rows, target_col
+    # Keep only numeric columns
+    numeric_cols = df_combined.select_dtypes(include=[np.number]).columns
+    df_combined = df_combined[numeric_cols]
+    
+    print(f"📊 Final dataset shape: {df_combined.shape}")
+    print(f"📅 Date range: {df_combined.index.min()} to {df_combined.index.max()}")
+    
+    return df_combined, target_col
 
 if __name__ == "__main__":
-    df, target = load_and_clean_data("Ejericio Bloomberg Commodities_revisar.xlsx")
-    print(df.head())
-    print(f"\nForma final: {df.shape}")
-    print(f"Columnas: {df.columns.tolist()}")
+    try:
+        df, target = load_and_clean_data("Bloomberg_commodities_prices.xlsx")
+        print("\n✅ Data loaded successfully!")
+        print(f"\n📋 First 5 rows:")
+        print(df.head())
+        print(f"\n📊 Available columns:")
+        for col in df.columns:
+            print(f"   - {col}")
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
