@@ -173,7 +173,7 @@ Distributed under the MIT License. See LICENSE file for more information.
 👤 Author
 mcml1225
 
-GitHub: @ymcml1225
+GitHub: @mcml1225
 
 Email: your.email@example.com
 
