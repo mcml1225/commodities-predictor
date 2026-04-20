@@ -171,9 +171,9 @@ Open a Pull Request
 Distributed under the MIT License. See LICENSE file for more information.
 
 👤 Author
-Your Name
+mcml1225
 
-GitHub: @your-username
+GitHub: @ymcml1225
 
 Email: your.email@example.com
 
