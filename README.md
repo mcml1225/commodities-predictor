@@ -59,14 +59,14 @@ The model uses Bloomberg commodity data with the following structure:
 ```bash
 git clone https://github.com/your-username/commodities-predictor.git
 cd commodities-predictor
-2. Create virtual environment (optional but recommended)
+### 2. Create virtual environment (optional but recommended)
 bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-3. Install dependencies
+### 3. Install dependencies
 bash
 pip install -r requirements.txt
-4. Run the application
+### 4. Run the application
 bash
 streamlit run app.py
 Usage
