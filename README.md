@@ -34,7 +34,7 @@ commodities-predictor/
 │ └── feature_importance.pkl # Feature importance analysis
 └── README.md
 
-text
+
 
 ## Data Source
 
@@ -56,18 +56,18 @@ The model uses Bloomberg commodity data with the following structure:
 
 ### 1. Clone the repository
 
-```bash
+
 git clone https://github.com/your-username/commodities-predictor.git
 cd commodities-predictor
 ### 2. Create virtual environment (optional but recommended)
-bash
+
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ### 3. Install dependencies
-bash
+
 pip install -r requirements.txt
 ### 4. Run the application
-bash
+
 streamlit run app.py
 Usage
 Load data: The app automatically loads Bloomberg_commodities_prices.xlsx
