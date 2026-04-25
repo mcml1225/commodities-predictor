@@ -57,7 +57,7 @@ The model uses Bloomberg commodity data with the following structure:
 ### 1. Clone the repository
 
 
-git clone https://github.com/your-username/commodities-predictor.git
+git clone https://github.com/mcml1225/commodities-predictor.git
 cd commodities-predictor
 ### 2. Create virtual environment (optional but recommended)
 
