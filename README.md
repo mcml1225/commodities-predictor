@@ -20,6 +20,7 @@ Supervised Machine Learning system that predicts commodity prices (natural gas, 
 - Feature importance: Identifies most influential variables
 
 ## Project Structure
+```
 commodities-predictor/
 │
 ├── app.py # Streamlit dashboard
@@ -33,7 +34,7 @@ commodities-predictor/
 │ ├── imputers.pkl # SimpleImputer objects
 │ └── feature_importance.pkl # Feature importance analysis
 └── README.md
-
+```
 
 
 ## Data Source
